@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using static audio.Form1;
 
 namespace audio
 {
@@ -37,11 +38,10 @@ namespace audio
         int brtn = 1000;
         bool flag = false;
         bool flagChanged = false;
-
-
-
+        int levelWork = 97;
         Color selectedColor;
         Thread thread = default;
+
 
         public class RGB
         {
@@ -50,44 +50,57 @@ namespace audio
             public byte B { set; get; } = 0;
         }
 
+        List<Animation> animationsList = new List<Animation>();
+        class Animation
+        {
+            public List<List<RGB>> cadrList = new List<List<RGB>>();
+            public decimal delay = 100;
+        }
+
         List<RGB> videoBuff = new List<RGB>();
         List<List<RGB>> cadrList = new List<List<RGB>>();
 
         bool btn = false;
         public NAudio.Wave.WasapiLoopbackCapture capt;
+
+        //GamePlane global
+        public static int point { get; set; } = 4;
+        public static bool fire { get; set; } = false;
+        public static bool changed { get; set; } = false;
         public void button1_Click(object sender, EventArgs e)
         {
-            Console.WriteLine("starting:");
-            Console.WriteLine("");
+                Console.WriteLine("starting:");
+                Console.WriteLine("");
 
-            serialPort1.PortName = "COM3";
-            //serialPort1.PortName = "COM3";
-            serialPort1.BaudRate = 115200;
-            serialPort1.RtsEnable = true;
-            serialPort1.DtrEnable = true;
-            if (serialPort1.IsOpen)
-            {
+                serialPort1.PortName = textBox1.Text;
+                serialPort1.BaudRate = 115200;
+                serialPort1.RtsEnable = true;
+                serialPort1.DtrEnable = true;
+                if (serialPort1.IsOpen)
+                {
+                    try
+                    {
+                        serialPort1.Close();
+                    }
+                    catch
+                    {
+
+                    }
+                }
                 try
                 {
-                    serialPort1.Close();
+                    serialPort1.Open();
                 }
                 catch
                 {
-
+                    MessageBox.Show("Не удалось подключиться!", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
-            }
-            try
-            {
-                serialPort1.Open();
-            }
-            catch
-            {
+                capt = new WasapiLoopbackCapture();
+                capt.DataAvailable += OnDataAvailable;
+                capt.StartRecording();
+                serialPort1.DataReceived += OnDataReceived;
 
-            }
-            capt = new WasapiLoopbackCapture();
-            capt.DataAvailable += OnDataAvailable;
-            capt.StartRecording();
-            serialPort1.DataReceived += OnDataReceived;
+                if(serialPort1.IsOpen) MessageBox.Show("Успешно подключено", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
@@ -141,7 +154,7 @@ namespace audio
 
             }
             max *= 100;
-            if (max > 97)
+            if (max > levelWork)
             {
                 if (btn)
                 {
@@ -153,9 +166,9 @@ namespace audio
                         }
                     }
                     serialPort1.Write(VideoBufToBuf(videoBuff), 0, serialBufLength);
-                    Thread.Sleep((int)numericUpDown1.Value);
+                    Thread.Sleep((int)PeriodNumeric.Value);
                     eraseLcd();
-                    Thread.Sleep((int)numericUpDown1.Value);
+                    Thread.Sleep((int)PeriodNumeric.Value);
 
                 }
             }
@@ -258,7 +271,10 @@ namespace audio
         }
         private void metroButton5_Click(object sender, EventArgs e)
         {
-            eraseLcd();
+            if(serialPort1.IsOpen) 
+                eraseLcd();
+            else
+                MessageBox.Show("Устройство не подключено.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         private void dataGridView1_CellClick(object sender, DataGridViewCellEventArgs e)
@@ -311,12 +327,12 @@ namespace audio
             {
                 foreach (var el in cadrList)
                 {
-                    if (metroToggle4.Checked)
+                    if (AnimationTextSwitch.Checked)
                     {
                         for (int i = -8; i != 9; i++)
                         {
-                            SerialPort1.Write(VideoBufToBuf(pictureLeftOffset(el, i)), 0, serialBufLength);
-                            Thread.Sleep((int)numericUpDown2.Value);
+                            SerialPort1.Write(VideoBufToBuf(pictureRightOffset(el, i)), 0, serialBufLength);
+                            Thread.Sleep((int)AnimationTextPeriodNumeric.Value);
                         }
                     }
                     else
@@ -374,13 +390,13 @@ namespace audio
         }
         private void metroToggle1_CheckedChanged(object sender, EventArgs e)
         {
-            if (metroToggle1.Checked)
+            if (SlideShowSwitch.Checked)
             {
                 thread = new Thread(outPictureOfSavedPicture);
                 List<object> obj = new List<object>();
 
                 obj.Add(serialPort1);
-                obj.Add((int)periodUpdate.Value);
+                obj.Add((int)PeriodUpdateNumeric.Value);
 
                 thread.Start(obj);
             }
@@ -420,17 +436,19 @@ namespace audio
                 cadrList.AddRange((List<List<RGB>>)serializer.Deserialize(textReader, typeof(List<List<RGB>>)));
             }
             counterPicture.Text = cadrList.Count().ToString();
+            list.Items.Clear();
+            cadrList.ForEach(x => list.Items.Add("Картинка № "+cadrList.IndexOf(x)));
         }
 
         private void metroToggle2_CheckedChanged(object sender, EventArgs e)
         {
-            if(metroToggle2.Checked)
+            if(InteractivDrawSwitch.Checked)
             {
-                timer1.Start();
+                InteractivDrawTimer.Start();
             }
             else
             {
-                timer1.Stop();
+                InteractivDrawTimer.Stop();
             }
         }
 
@@ -448,18 +466,21 @@ namespace audio
 
         private void metroToggle3_CheckedChanged(object sender, EventArgs e)
         {
-           btn = metroToggle3.Checked;
+           btn = AudioActivationSwitch.Checked;
+            if (AudioActivationTimer.Enabled) { AudioActivationTimer.Stop(); } else { AudioActivationTimer.Start(); }
         }
 
         private void metroToggle5_CheckedChanged(object sender, EventArgs e)
         {
-
+            timer2.Enabled = ClockSwitch.Checked;
         }
 
-        private void timer2_Tick(object sender, EventArgs e)
+        private async void timer2_Tick(object sender, EventArgs e)
         {
+            timer2.Stop();
             var numbers = new List<List<RGB>>();
             JsonSerializer serializer = new JsonSerializer();
+            List<List<RGB>> list = new List<List<RGB>>();
 
             using (TextReader textReader = new StreamReader("numbers.txt"))
             {
@@ -467,24 +488,269 @@ namespace audio
                 numbers.AddRange((List<List<RGB>>)serializer.Deserialize(textReader, typeof(List<List<RGB>>)));
             }
             counterPicture.Text = numbers.Count().ToString();
-
-            var hour = DateTime.Now.Hour;
-            var minute = DateTime.Now.Minute;
-
-            if (hour > 9)
+            while (ClockSwitch.Checked)
             {
-                cadrList.Add(numbers[Int32.Parse((hour.ToString()[0]).ToString())]);
-                cadrList.Add(numbers[Int32.Parse((hour.ToString()[1]).ToString())]);
+                list.Clear();
+                var hour = DateTime.Now.Hour;
+                var minute = DateTime.Now.Minute;
+
+                if (hour > 9)
+                {
+                    list.Add(numbers[Int32.Parse((hour.ToString()[0]).ToString())]);
+                    list.Add(numbers[Int32.Parse((hour.ToString()[1]).ToString())]);
+                }
+                else { list.Add(numbers[hour]); }
+
+                eraseBuf();
+                LCD(2, 3, 100, 100, 0);
+                LCD(2, 4, 100, 100, 0);
+                LCD(3, 3, 100, 100, 0);
+                LCD(3, 4, 100, 100, 0);
+
+                LCD(5, 3, 100, 100, 0);
+                LCD(5, 4, 100, 100, 0);
+                LCD(6, 3, 100, 100, 0);
+                LCD(6, 4, 100, 100, 0);
+
+                list.Add(videoBuff);
+
+                if (minute > 9)
+                {
+                    list.Add(numbers[Int32.Parse((minute.ToString()[0]).ToString())]);
+                    list.Add(numbers[Int32.Parse((minute.ToString()[1]).ToString())]);
+                }
+                else { list.Add(numbers[minute]); }
+
+                foreach (var el in list)
+                {
+                     for (int i = -8; (i != 9)&&ClockSwitch.Checked; i++)
+                     {
+                         serialPort1.Write(VideoBufToBuf(pictureRightOffset(el, i)), 0, serialBufLength);
+                         await Task.Delay(50);
+                     }
+                }
+                await Task.Delay(100);
             }
-            else { cadrList.Add(numbers[hour]); }
+        }
 
+        private void trackBar4_Scroll(object sender, EventArgs e)
+        {
+            levelWork = trackBar4.Value;
+        }
 
-            if (minute > 9)
+        private async void metroToggle6_CheckedChanged(object sender, EventArgs e)
+        {
+            while(AnimationSwitch.Checked)
             {
-                cadrList.Add(numbers[Int32.Parse((minute.ToString()[0]).ToString())]);
-                cadrList.Add(numbers[Int32.Parse((minute.ToString()[1]).ToString())]);
+                foreach(var anim in animationsList)
+                {
+                    try
+                    {
+                        for(int i = 0; (i< 5000/(anim.cadrList.Count*((3*anim.delay)+15)))&&AnimationSwitch.Checked; i++)
+                        {
+                            foreach(var pict in anim.cadrList)
+                            {
+                                await Task.Delay(2*Convert.ToInt32(anim.delay)+15);
+                                serialPort1.Write(VideoBufToBuf(pict), 0, serialBufLength);
+                                await Task.Delay(Convert.ToInt32(anim.delay));
+                            }
+                            var picture = anim;
+                        }
+                    }
+                    catch
+                    {
+                        MessageBox.Show("Не удалось вывести изображение," + Environment.NewLine + "возможно вы не выбрали его.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
             }
-            else { cadrList.Add(numbers[minute]); }
+        }
+
+        private void showPicBtn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                int index = list.SelectedIndex;
+                var picture = cadrList[index];
+
+                serialPort1.Write(VideoBufToBuf(picture), 0, serialBufLength);
+            }
+            catch
+            {
+                MessageBox.Show("Не удалось вывести изображение," + Environment.NewLine + "возможно вы не выбрали его.", "Ошибка",MessageBoxButtons.OK,MessageBoxIcon.Error);
+            }
+        }
+
+        private void removePictBtn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                cadrList.Remove(cadrList[list.SelectedIndex]);
+
+                counterPicture.Text = cadrList.Count().ToString();
+                list.Items.Clear();
+                cadrList.ForEach(x => list.Items.Add("Картинка № " + cadrList.IndexOf(x)));
+            }
+            catch
+            {
+                MessageBox.Show("Не удалось удалить изображение," + Environment.NewLine + "возможно вы не выбрали его.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+        }
+
+        private void metroToggle1_CheckedChanged_1(object sender, EventArgs e)
+        {
+                if (game1Switch.Checked)
+                {
+                    thread = new Thread(gamePlane);
+                    List<object> obj = new List<object>();
+
+                    obj.Add(serialPort1);
+                    thread.Start(obj);
+                }
+                else
+                {
+                    thread.Abort();
+                    thread.Join(100);
+                }
+        }
+
+        async void gamePlane(object list)
+        {
+            var List = (List<object>)list;
+            var SerialPort1 = (SerialPort)List[0];
+           // var point = GamePlaneClass.point;
+            var userDot = new RGB { R = 100, G = 100, B = 0 };
+
+            var userGun = new RGB { R = 255, G = 0, B = 50 };
+            int fireCounter = 6;
+            int userDotBuf = 0;
+            while (true)
+            {
+                if (changed)
+                {
+                    eraseLcd();
+                    await Task.Delay(7);
+                    LCD(7, point, userDot.R, userDot.G, userDot.B);
+                    serialPort1.Write(VideoBufToBuf(videoBuff), 0, serialBufLength);
+                    Console.WriteLine("ok");
+                    await Task.Delay(7);
+                    changed = false;
+                }
+                if(fire)
+                {
+                    if (fireCounter == 6) userDotBuf = point;
+                    LCD(fireCounter, userDotBuf, userGun.R, userGun.G, userGun.B);
+                    LCD(7, point, userDot.R, userDot.G, userDot.B);
+                    serialPort1.Write(VideoBufToBuf(videoBuff), 0, serialBufLength);
+                    await Task.Delay(7);
+                    for (int i=0; i<10;i++)
+                    {
+                        if(changed)
+                        {
+                            eraseLcd();
+                            await Task.Delay(7);
+                            LCD(fireCounter, userDotBuf, userGun.R, userGun.G, userGun.B);
+                            LCD(7, point, userDot.R, userDot.G, userDot.B);
+                            serialPort1.Write(VideoBufToBuf(videoBuff), 0, serialBufLength);
+                            changed = false;
+                        }
+                        await Task.Delay(7);
+                    }
+                    fireCounter--;
+                    if(fireCounter==-1)
+                    {
+                        fireCounter = 6;
+                        fire = false;
+                        eraseLcd();
+                        await Task.Delay(7);
+                        LCD(7, point, userDot.R, userDot.G, userDot.B);
+                        serialPort1.Write(VideoBufToBuf(videoBuff), 0, serialBufLength);
+                    }
+                }
+            }
+
+        }
+
+        private void tabControl1_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar.ToString() == Keys.A.ToString())
+            {
+                point = point - 1 == -1 ? 7 : point - 1;
+                changed = true;
+            }
+            else
+                if (e.KeyChar.ToString() == Keys.D.ToString())
+            {
+                point = point + 1 == 8 ? 0 : point + 1;
+                changed = true;
+            }
+            if (e.KeyChar.ToString() == Keys.W.ToString())
+              fire = true;
+             Console.WriteLine("point {0}, fire {1}", point, fire);
+             changed = true;
+        }
+
+        private void metroButton1_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+            openFileDialog.ShowDialog();
+
+            JsonSerializer serializer = new JsonSerializer();
+
+            using (TextReader textReader = new StreamReader(openFileDialog.FileName))
+            {
+                animationsList.Clear();
+                animationsList.AddRange((List<Animation>)serializer.Deserialize(textReader, typeof(List<Animation>)));
+            }
+            label8.Text = animationsList.Count.ToString();
+        }
+
+        private void metroButton2_Click(object sender, EventArgs e)
+        {
+            SaveFileDialog saveFileDialog = new SaveFileDialog();
+            saveFileDialog.ShowDialog();
+
+            JsonSerializer serializer = new JsonSerializer();
+
+            using (TextWriter textWriter = new StreamWriter(saveFileDialog.FileName))
+            {
+                serializer.Serialize(textWriter, animationsList);
+            }
+
+        }
+
+        private void metroButton3_Click_1(object sender, EventArgs e)
+        {
+            var animation = new Animation { cadrList = this.cadrList.ToList(), delay = PeriodUpdateNumeric.Value };
+            animationsList.Add(animation);
+            label8.Text = (Convert.ToInt32(label8.Text) + 1).ToString();
+        }
+
+        private void AnimationTextSwitch_CheckedChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private async void metroToggle1_CheckedChanged_2(object sender, EventArgs e)
+        {
+            while(metroToggle1.Checked)
+            {
+                SlideShowSwitch.Checked = true;
+                await Task.Delay(15000);
+                SlideShowSwitch.Checked = false;
+
+                AudioActivationSwitch.Checked = true;
+                await Task.Delay(15000);
+                AudioActivationSwitch.Checked = false;
+
+                ClockSwitch.Checked = true;
+                await Task.Delay(15000);
+                ClockSwitch.Checked = false;
+
+                AnimationSwitch.Checked = true;
+                await Task.Delay(30000);
+                AnimationSwitch.Checked = false;
+            }
         }
     }
 }
