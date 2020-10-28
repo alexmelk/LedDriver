@@ -752,5 +752,20 @@ namespace audio
                 AnimationSwitch.Checked = false;
             }
         }
+
+        private async void metroButton4_Click(object sender, EventArgs e)
+        {
+            Console.WriteLine(R + G + B);
+            for (int i = 0; i < ledsInRow; i++)
+            {
+                for (int j = 0; j < ledsInRow; j++)
+                {
+                    LCD(i, j, R, G, B);
+                }
+            }
+            serialPort1.Write(VideoBufToBuf(videoBuff), 0, serialBufLength);
+            Console.WriteLine("ok");
+            await Task.Delay(100);
+        }
     }
 }
